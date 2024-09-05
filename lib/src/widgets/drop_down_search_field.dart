@@ -846,18 +846,7 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
       // the style visually. However, when VO/TB are not enabled it is
       // necessary to use the Positioned widget to allow the elements to be
       // properly tappable.
-      return MediaQuery.of(context).accessibleNavigation
-          ? Semantics(
-              container: true,
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: w),
-                  child: compositedFollower,
-                ),
-              ),
-            )
-          : Positioned(
+      return Positioned(
               width: w,
               child: compositedFollower,
             );
