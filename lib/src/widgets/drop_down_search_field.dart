@@ -615,10 +615,22 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
   late final _shouldRefreshSuggestionsFocusIndex =
       ShouldRefreshSuggestionFocusIndexNotifier(textFieldFocusNode: _effectiveFocusNode);
 
+  bool _isKeyboardVisible = false;
   @override
   void didChangeMetrics() {
     // Catch keyboard event and orientation change; resize suggestions list
     this._suggestionsBox!.onChangeMetrics();
+    final bottomInset = WidgetsBinding.instance.window.viewInsets.bottom;
+    final isKeyboardVisible = bottomInset > 0.0;
+    if (_isKeyboardVisible != isKeyboardVisible) {
+      setState(() {
+        _isKeyboardVisible = isKeyboardVisible;
+        if (!_isKeyboardVisible) {
+          // Unfocus when keyboard is hidden
+          FocusScope.of(context).unfocus();
+        }
+      });
+    }
   }
 
   @override
