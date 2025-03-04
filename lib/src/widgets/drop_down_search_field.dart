@@ -6,6 +6,8 @@ import 'package:drop_down_search_field/src/suggestions/suggestions_box_controlle
 import 'package:drop_down_search_field/src/suggestions/suggestions_box_decoration.dart';
 import 'package:drop_down_search_field/src/suggestions/suggestions_list.dart';
 import 'package:drop_down_search_field/src/type_def.dart';
+import 'package:drop_down_search_field/src/multi_selection_widgets/multi_select_drop_down_box_configuration.dart';
+import 'package:drop_down_search_field/src/multi_selection_widgets/multi_select_dropdown_display_widget.dart';
 import 'package:drop_down_search_field/src/widgets/search_field_configuration.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -248,8 +250,8 @@ import 'package:pointer_interceptor/pointer_interceptor.dart';
 class DropDownSearchField<T> extends StatefulWidget {
   /// Called with the search pattern to get the search suggestions.
   ///
-  /// This callback must not be null. It is be called by the DropDownSearchField widget
-  /// and provided with the search pattern. It should return a [List](https://api.dartlang.org/stable/2.0.0/dart-core/List-class.html)
+  /// If paginatedSuggestionCallback is null then this callback must not be null. It is be called by the
+  /// DropDownSearchField widget and provided with the search pattern. It should return a [List](https://api.dartlang.org/stable/2.0.0/dart-core/List-class.html)
   /// of suggestions either synchronously, or asynchronously (as the result of a
   /// [Future](https://api.dartlang.org/stable/dart-async/Future-class.html)).
   /// Typically, the list of suggestions should not contain more than 4 or 5
@@ -262,7 +264,25 @@ class DropDownSearchField<T> extends StatefulWidget {
   ///   return await _getSuggestions(pattern);
   /// }
   /// ```
-  final SuggestionsCallback<T> suggestionsCallback;
+  final SuggestionsCallback<T>? suggestionsCallback;
+
+  /// Called with the search pattern to get the search suggestions.
+  ///
+  /// If suggestionCallback is null then this callback must not be null. It is be called by the DropDownSearchField
+  /// widget and provided with the search pattern. It should return a [List](https://api.dartlang.org/stable/2.0.0/dart-core/List-class.html)
+  /// of suggestions either synchronously, or asynchronously (as the result of a
+  /// [Future](https://api.dartlang.org/stable/dart-async/Future-class.html)).
+  /// Typically, the list of suggestions should not contain more than 4 or 5
+  /// entries. These entries will then be provided to [itemBuilder] to display
+  /// the suggestions.
+  ///
+  /// Example:
+  /// ```dart
+  /// paginatedSuggestionsCallback: (pattern, page) async {
+  ///   return await _getSuggestions(pattern, page);
+  /// }
+  /// ```
+  final SuggestionsCallback<T>? paginatedSuggestionsCallback;
 
   /// Called when a suggestion is tapped.
   ///
@@ -287,7 +307,32 @@ class DropDownSearchField<T> extends StatefulWidget {
   ///   _controller.text = suggestion['name'];
   /// }
   /// ```
-  final SuggestionSelectionCallback<T> onSuggestionSelected;
+  final SuggestionSelectionCallback<T>? onSuggestionSelected;
+
+  /// Called when multiple suggestions are selected.
+  ///
+  /// This callback must not be null. It is called by the DropDownSearchField widget and
+  /// provided with the list of values of the selected suggestions.
+  ///
+  /// For example, you might want to navigate to a specific view when the user
+  /// selects multiple suggestions:
+  /// ```dart
+  /// onSuggestionMultiSelected: (suggestions) {
+  ///   Navigator.of(context).push(MaterialPageRoute(
+  ///     builder: (context) => SearchResults(
+  ///       searchItems: suggestions
+  ///     )
+  ///   ));
+  /// }
+  /// ```
+  ///
+  /// Or to set the value of the text field:
+  /// ```dart
+  /// onSuggestionMultiSelected: (suggestions) {
+  ///   _controller.text = suggestions.map((s) => s['name']).join(', ');
+  /// }
+  /// ```
+  final SuggestionMultiSelectionCallback<T>? onSuggestionMultiSelected;
 
   /// Called for each suggestion returned by [suggestionsCallback] to build the
   /// corresponding widget.
@@ -539,14 +584,34 @@ class DropDownSearchField<T> extends StatefulWidget {
   // Default is false
   final bool displayAllSuggestionWhenTap;
 
+  // If set to true, the dropdown will be a multi-select dropdown
+  // If set to false, the dropdown will be a single-select dropdown
+  final bool isMultiSelectDropdown;
+
+  // The selected items in the dropdown when it is a multi-select dropdown
+  final List<T>? initiallySelectedItems;
+
+  // The configuration of the dropdown box when it is a multi-select dropdown
+  final DropdownBoxConfiguration? multiSelectDropdownBoxConfiguration;
+
+  /// Validator for the [FormField](https://docs.flutter.io/flutter/widgets/FormField-class.html)
+  final FormFieldValidator<List<T>>? validator;
+
+  /// The builder for the chips that are displayed in the dropdown
+  ///
+  /// This property allows you to customize the appearance and behavior of the chips
+  final ChipBuilder<T>? chipBuilder;
+
   /// Creates a [DropDownSearchField]
   const DropDownSearchField({
-    required this.suggestionsCallback,
+    this.suggestionsCallback,
+    this.paginatedSuggestionsCallback,
     required this.itemBuilder,
     this.itemSeparatorBuilder,
     this.layoutArchitecture,
     this.intercepting = false,
-    required this.onSuggestionSelected,
+    this.onSuggestionSelected,
+    this.onSuggestionMultiSelected,
     this.textFieldConfiguration = const TextFieldConfiguration(),
     this.suggestionsBoxDecoration = const SuggestionsBoxDecoration(),
     this.debounceDuration = const Duration(milliseconds: 300),
@@ -575,26 +640,58 @@ class DropDownSearchField<T> extends StatefulWidget {
     this.onSuggestionsBoxToggle,
     this.hideKeyboardOnDrag = false,
     required this.displayAllSuggestionWhenTap,
+    required this.isMultiSelectDropdown,
+    this.initiallySelectedItems,
+    this.multiSelectDropdownBoxConfiguration,
+    this.validator,
+    this.chipBuilder,
     super.key,
   })  : assert(animationStart >= 0.0 && animationStart <= 1.0),
-        assert(direction == AxisDirection.down || direction == AxisDirection.up),
+        assert(
+            direction == AxisDirection.down || direction == AxisDirection.up),
         assert(minCharsForSuggestions >= 0),
-        assert(!hideKeyboardOnDrag || hideKeyboardOnDrag && !hideSuggestionsOnKeyboardHide);
+        assert(!hideKeyboardOnDrag ||
+            hideKeyboardOnDrag && !hideSuggestionsOnKeyboardHide),
+        assert(
+          (suggestionsCallback != null ||
+                  paginatedSuggestionsCallback != null) &&
+              !(suggestionsCallback != null &&
+                  paginatedSuggestionsCallback != null),
+          'Either suggestionsCallback or paginatedSuggestionsCallback must be provided, but not both.',
+        ),
+        assert(
+          !(onSuggestionSelected != null && onSuggestionMultiSelected != null),
+          'Only one of onSuggestionSelected or onSuggestionMultiSelected must be provided.',
+        ),
+        assert(
+          !isMultiSelectDropdown ||
+              (onSuggestionMultiSelected != null &&
+                  initiallySelectedItems != null),
+          'onSuggestionMultiSelected and initiallySelectedItems must be provided when isMultiSelectDropdown is true.',
+        ),
+        assert(
+            isMultiSelectDropdown ||
+                multiSelectDropdownBoxConfiguration == null,
+            'Cannot provide multiSelectDropdownBoxConfiguration when isMultiSelectDropdown is false.');
 
   @override
   // ignore: library_private_types_in_public_api
   _DropDownSearchFieldState<T> createState() => _DropDownSearchFieldState<T>();
 }
 
-class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with WidgetsBindingObserver {
+class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>>
+    with WidgetsBindingObserver {
   FocusNode? _focusNode;
-  final KeyboardSuggestionSelectionNotifier _keyboardSuggestionSelectionNotifier =
+  final KeyboardSuggestionSelectionNotifier
+      _keyboardSuggestionSelectionNotifier =
       KeyboardSuggestionSelectionNotifier();
   TextEditingController? _textEditingController;
   SuggestionsBox? _suggestionsBox;
 
-  TextEditingController? get _effectiveController => widget.textFieldConfiguration.controller ?? _textEditingController;
-  FocusNode? get _effectiveFocusNode => widget.textFieldConfiguration.focusNode ?? _focusNode;
+  TextEditingController? get _effectiveController =>
+      widget.textFieldConfiguration.controller ?? _textEditingController;
+  FocusNode? get _effectiveFocusNode =>
+      widget.textFieldConfiguration.focusNode ?? _focusNode;
   late VoidCallback _focusNodeListener;
 
   final LayerLink _layerLink = LayerLink();
@@ -613,7 +710,8 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
 
   bool _areSuggestionsFocused = false;
   late final _shouldRefreshSuggestionsFocusIndex =
-      ShouldRefreshSuggestionFocusIndexNotifier(textFieldFocusNode: _effectiveFocusNode);
+      ShouldRefreshSuggestionFocusIndexNotifier(
+          textFieldFocusNode: _effectiveFocusNode);
 
   bool _isKeyboardVisible = false;
   @override
@@ -650,8 +748,9 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
 
   KeyEventResult _onKeyEvent(FocusNode _, KeyEvent event) {
     // HardwareKeyboard.instance.isLogicalKeyPressed
-  
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp || event.logicalKey == LogicalKeyboardKey.arrowDown) {
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+        event.logicalKey == LogicalKeyboardKey.arrowDown) {
       // do nothing to avoid puzzling users until keyboard arrow nav is implemented
     } else {
       _keyboardSuggestionSelectionNotifier.onKeyboardEvent(event);
@@ -668,7 +767,8 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
       this._textEditingController = TextEditingController();
     }
 
-    final textFieldConfigurationFocusNode = widget.textFieldConfiguration.focusNode;
+    final textFieldConfigurationFocusNode =
+        widget.textFieldConfiguration.focusNode;
     if (textFieldConfigurationFocusNode == null) {
       this._focusNode = FocusNode(onKeyEvent: _onKeyEvent);
     } else if (textFieldConfigurationFocusNode.onKeyEvent == null) {
@@ -694,7 +794,8 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
     );
 
     widget.suggestionsBoxController?.suggestionsBox = this._suggestionsBox;
-    widget.suggestionsBoxController?.effectiveFocusNode = this._effectiveFocusNode;
+    widget.suggestionsBoxController?.effectiveFocusNode =
+        this._effectiveFocusNode;
 
     this._focusNodeListener = () {
       if (_effectiveFocusNode!.hasFocus) {
@@ -711,7 +812,8 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
     this._effectiveFocusNode!.addListener(_focusNodeListener);
 
     // hide suggestions box on keyboard closed
-    this._keyboardVisibilitySubscription = _keyboardVisibility?.listen((bool isVisible) {
+    this._keyboardVisibilitySubscription =
+        _keyboardVisibility?.listen((bool isVisible) {
       if (widget.hideSuggestionsOnKeyboardHide && !isVisible) {
         _effectiveFocusNode!.unfocus();
       }
@@ -749,7 +851,8 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
     _resizeOnScrollTimer?.cancel();
     if (isScrolling) {
       // Scroll started
-      _resizeOnScrollTimer = Timer.periodic(_resizeOnScrollRefreshRate, (timer) {
+      _resizeOnScrollTimer =
+          Timer.periodic(_resizeOnScrollRefreshRate, (timer) {
         _suggestionsBox!.resize();
       });
     } else {
@@ -783,16 +886,24 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
         errorBuilder: widget.errorBuilder,
         transitionBuilder: widget.transitionBuilder,
         suggestionsCallback: widget.suggestionsCallback,
+        paginatedSuggestionsCallback: widget.paginatedSuggestionsCallback,
         animationDuration: widget.animationDuration,
         animationStart: widget.animationStart,
         getImmediateSuggestions: widget.getImmediateSuggestions,
-        onSuggestionSelected: (T selection) {
-          if (!widget.keepSuggestionsOnSuggestionSelected) {
-            this._effectiveFocusNode!.unfocus();
-            this._suggestionsBox!.close();
-          }
-          widget.onSuggestionSelected(selection);
-        },
+        onSuggestionSelected: widget.onSuggestionSelected == null
+            ? null
+            : (T selection) {
+                if (!widget.keepSuggestionsOnSuggestionSelected) {
+                  this._effectiveFocusNode!.unfocus();
+                  this._suggestionsBox!.close();
+                }
+                widget.onSuggestionSelected!(selection);
+              },
+        onSuggestionMultiSelected: widget.onSuggestionMultiSelected == null
+            ? null
+            : (suggestion, selected) {
+                widget.onSuggestionMultiSelected!(suggestion, selected);
+              },
         itemBuilder: widget.itemBuilder,
         itemSeparatorBuilder: widget.itemSeparatorBuilder,
         layoutArchitecture: widget.layoutArchitecture,
@@ -802,26 +913,35 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
         hideOnError: widget.hideOnError,
         keepSuggestionsOnLoading: widget.keepSuggestionsOnLoading,
         minCharsForSuggestions: widget.minCharsForSuggestions,
-        keyboardSuggestionSelectionNotifier: _keyboardSuggestionSelectionNotifier,
-        shouldRefreshSuggestionFocusIndexNotifier: _shouldRefreshSuggestionsFocusIndex,
+        keyboardSuggestionSelectionNotifier:
+            _keyboardSuggestionSelectionNotifier,
+        shouldRefreshSuggestionFocusIndexNotifier:
+            _shouldRefreshSuggestionsFocusIndex,
         giveTextFieldFocus: giveTextFieldFocus,
         onSuggestionFocus: onSuggestionFocus,
         onKeyEvent: _onKeyEvent,
         hideKeyboardOnDrag: widget.hideKeyboardOnDrag,
         displayAllSuggestionWhenTap: widget.displayAllSuggestionWhenTap,
+        isMultiSelectDropdown: widget.isMultiSelectDropdown,
+        initiallySelectedItems: widget.initiallySelectedItems,
+        suggestionsBoxController: widget.suggestionsBoxController,
+        textFieldWidget: textFieldWidget(),
       );
 
       double w = _suggestionsBox!.textBoxWidth;
       if (widget.suggestionsBoxDecoration.constraints != null) {
         if (widget.suggestionsBoxDecoration.constraints!.minWidth != 0.0 &&
-            widget.suggestionsBoxDecoration.constraints!.maxWidth != double.infinity) {
+            widget.suggestionsBoxDecoration.constraints!.maxWidth !=
+                double.infinity) {
           w = (widget.suggestionsBoxDecoration.constraints!.minWidth +
                   widget.suggestionsBoxDecoration.constraints!.maxWidth) /
               2;
-        } else if (widget.suggestionsBoxDecoration.constraints!.minWidth != 0.0 &&
+        } else if (widget.suggestionsBoxDecoration.constraints!.minWidth !=
+                0.0 &&
             widget.suggestionsBoxDecoration.constraints!.minWidth > w) {
           w = widget.suggestionsBoxDecoration.constraints!.minWidth;
-        } else if (widget.suggestionsBoxDecoration.constraints!.maxWidth != double.infinity &&
+        } else if (widget.suggestionsBoxDecoration.constraints!.maxWidth !=
+                double.infinity &&
             widget.suggestionsBoxDecoration.constraints!.maxWidth < w) {
           w = widget.suggestionsBoxDecoration.constraints!.maxWidth;
         }
@@ -833,22 +953,26 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
         offset: Offset(
             widget.suggestionsBoxDecoration.offsetX,
             _suggestionsBox!.direction == AxisDirection.down
-                ? _suggestionsBox!.textBoxHeight + widget.suggestionsBoxVerticalOffset
+                ? _suggestionsBox!.textBoxHeight +
+                    widget.suggestionsBoxVerticalOffset
                 : -widget.suggestionsBoxVerticalOffset),
-        child: TextFieldTapRegion(
+        child: FractionalTranslation(
+          translation: _suggestionsBox!.direction == AxisDirection.down
+              ? const Offset(0, 0)
+              : const Offset(0.0, -1.0),
+          child: TextFieldTapRegion(
             onTapOutside: (e) {
-              if (widget.suggestionsBoxDecoration.closeSuggestionBoxWhenTapOutside) {
+              if (widget
+                  .suggestionsBoxDecoration.closeSuggestionBoxWhenTapOutside) {
                 if (this._suggestionsBox?.isOpened ?? false) {
+                  this._focusNode?.unfocus();
                   this._suggestionsBox?.close();
                 }
               }
             },
-            child: _suggestionsBox!.direction == AxisDirection.down
-                ? suggestionsList
-                : FractionalTranslation(
-                    translation: const Offset(0.0, -1.0), // visually flips list to go up
-                    child: suggestionsList,
-                  )),
+            child: suggestionsList,
+          ),
+        ),
       );
 
       // When wrapped in the Positioned widget, the suggestions box widget
@@ -871,41 +995,58 @@ class _DropDownSearchFieldState<T> extends State<DropDownSearchField<T>> with Wi
       link: this._layerLink,
       child: PointerInterceptor(
         intercepting: widget.intercepting,
-        child: TextField(
-            focusNode: this._effectiveFocusNode,
-            controller: this._effectiveController,
-            decoration: widget.textFieldConfiguration.decoration,
-            style: widget.textFieldConfiguration.style,
-            textAlign: widget.textFieldConfiguration.textAlign,
-            enabled: widget.textFieldConfiguration.enabled,
-            keyboardType: widget.textFieldConfiguration.keyboardType,
-            autofocus: widget.textFieldConfiguration.autofocus,
-            inputFormatters: widget.textFieldConfiguration.inputFormatters,
-            autocorrect: widget.textFieldConfiguration.autocorrect,
-            maxLines: widget.textFieldConfiguration.maxLines,
-            textAlignVertical: widget.textFieldConfiguration.textAlignVertical,
-            minLines: widget.textFieldConfiguration.minLines,
-            maxLength: widget.textFieldConfiguration.maxLength,
-            maxLengthEnforcement: widget.textFieldConfiguration.maxLengthEnforcement,
-            obscureText: widget.textFieldConfiguration.obscureText,
-            onChanged: widget.textFieldConfiguration.onChanged,
-            onSubmitted: widget.textFieldConfiguration.onSubmitted,
-            onEditingComplete: widget.textFieldConfiguration.onEditingComplete,
-            onTap: widget.textFieldConfiguration.onTap,
-            onTapOutside: widget.textFieldConfiguration.onTapOutside,
-            scrollPadding: widget.textFieldConfiguration.scrollPadding,
-            textInputAction: widget.textFieldConfiguration.textInputAction,
-            textCapitalization: widget.textFieldConfiguration.textCapitalization,
-            keyboardAppearance: widget.textFieldConfiguration.keyboardAppearance,
-            cursorWidth: widget.textFieldConfiguration.cursorWidth,
-            cursorRadius: widget.textFieldConfiguration.cursorRadius,
-            cursorColor: widget.textFieldConfiguration.cursorColor,
-            mouseCursor: widget.textFieldConfiguration.mouseCursor,
-            textDirection: widget.textFieldConfiguration.textDirection,
-            enableInteractiveSelection: widget.textFieldConfiguration.enableInteractiveSelection,
-            readOnly: widget.hideKeyboard,
-            autofillHints: widget.textFieldConfiguration.autofillHints),
+        child: widget.isMultiSelectDropdown
+            ? MultiSelectDropdownDisplayWidget<T>(
+                initiallySelectedItems: widget.initiallySelectedItems ?? [],
+                textFieldConfiguration: widget.textFieldConfiguration,
+                focusNode: this._effectiveFocusNode,
+                dropdownBoxConfiguration:
+                    widget.multiSelectDropdownBoxConfiguration ??
+                        const DropdownBoxConfiguration(),
+                chipBuilder: widget.chipBuilder,
+                // validator: widget.validator,
+              )
+            : textFieldWidget(),
       ),
+    );
+  }
+
+  Widget textFieldWidget() {
+    return TextField(
+      focusNode: this._effectiveFocusNode,
+      controller: this._effectiveController,
+      decoration: widget.textFieldConfiguration.decoration,
+      style: widget.textFieldConfiguration.style,
+      textAlign: widget.textFieldConfiguration.textAlign,
+      enabled: widget.textFieldConfiguration.enabled,
+      keyboardType: widget.textFieldConfiguration.keyboardType,
+      autofocus: widget.textFieldConfiguration.autofocus,
+      inputFormatters: widget.textFieldConfiguration.inputFormatters,
+      autocorrect: widget.textFieldConfiguration.autocorrect,
+      maxLines: widget.textFieldConfiguration.maxLines,
+      textAlignVertical: widget.textFieldConfiguration.textAlignVertical,
+      minLines: widget.textFieldConfiguration.minLines,
+      maxLength: widget.textFieldConfiguration.maxLength,
+      maxLengthEnforcement: widget.textFieldConfiguration.maxLengthEnforcement,
+      obscureText: widget.textFieldConfiguration.obscureText,
+      onChanged: widget.textFieldConfiguration.onChanged,
+      onSubmitted: widget.textFieldConfiguration.onSubmitted,
+      onEditingComplete: widget.textFieldConfiguration.onEditingComplete,
+      onTap: widget.textFieldConfiguration.onTap,
+      onTapOutside: widget.textFieldConfiguration.onTapOutside,
+      scrollPadding: widget.textFieldConfiguration.scrollPadding,
+      textInputAction: widget.textFieldConfiguration.textInputAction,
+      textCapitalization: widget.textFieldConfiguration.textCapitalization,
+      keyboardAppearance: widget.textFieldConfiguration.keyboardAppearance,
+      cursorWidth: widget.textFieldConfiguration.cursorWidth,
+      cursorRadius: widget.textFieldConfiguration.cursorRadius,
+      cursorColor: widget.textFieldConfiguration.cursorColor,
+      mouseCursor: widget.textFieldConfiguration.mouseCursor,
+      textDirection: widget.textFieldConfiguration.textDirection,
+      enableInteractiveSelection:
+          widget.textFieldConfiguration.enableInteractiveSelection,
+      readOnly: widget.hideKeyboard,
+      autofillHints: widget.textFieldConfiguration.autofillHints,
     );
   }
 }

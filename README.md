@@ -7,6 +7,10 @@ A DropDownSearchField (autocomplete) widget for Flutter, where you can show sugg
 
 <img src="https://raw.githubusercontent.com/rohanjariwala03/drop_down_search_field/master/drop_down_search_field.gif">
 
+<img src="https://raw.githubusercontent.com/rohanjariwala03/drop_down_search_field/master/paginated_dropdown_search_field.gif">
+
+<img src="https://raw.githubusercontent.com/rohanjariwala03/drop_down_search_field/master/multi_select_dropdown_search_field.gif">
+
 ## Features
 * Displays suggestions in a floating overlay above other widgets.
 * Allows customization of the suggestion appearance using a builder function.
@@ -16,6 +20,8 @@ A DropDownSearchField (autocomplete) widget for Flutter, where you can show sugg
 * Offers two versions: a standard version and a FormField version that includes validation and submission features.
 * Highly customizable with options to modify the suggestion box decoration, 
   loading bar, animation, debounce duration, and more.
+* Supports multi-select dropdowns.
+* Supports paginated suggestions.
 
 ## Installation
 See the [installation instructions on pub](https://pub.dartlang.org/packages/drop_down_search_field#-installing-tab-).
@@ -163,9 +169,9 @@ here's how we render the items in a grid using the standard `GridView`:
 ```dart
 DropDownSearchField(
     ...,
-  layoutArchitecture: (items, scrollContoller) {
+  layoutArchitecture: (items, scrollController) {
         return ListView(
-            controller: scrollContoller,
+            controller: scrollController,
             shrinkWrap: true,
             children: [
               GridView.count(
@@ -301,7 +307,7 @@ For example:
 transitionBuilder: (context, suggestionsBox, animationController) =>
   FadeTransition(
     child: suggestionsBox,
-    opafruit: CurvedAnimation(
+    opacity: CurvedAnimation(
       parent: animationController,
       curve: Curves.fastOutSlowIn
     ),
@@ -335,9 +341,16 @@ You can manually control the suggestions box by creating a `SuggestionsBoxContro
 assigning it to the `suggestionsBoxController` property. This enables you to have control over opening, 
 closing, toggling, or resizing the suggestions box as per your requirements.
 
-## Blog
+You can also customize suggestion box scroll bar by using property called `scrollBarDecoration` inside `suggestionsBoxDecoration`. This allows you to control color, thickness, margin and more.
+
+<!-- ## Blog
 You can checkout detailed blog on medium.
-[drop_down_search_field](https://medium.com/@rohanjariwala03/dropdown-with-future-search-option-818a7dc1196)
+[drop_down_search_field](https://medium.com/@rohanjariwala03/dropdown-with-future-search-option-818a7dc1196) -->
 
 ## How you can help
-[Contribution Guidelines](https://github.com/rohanjariwala03/drop_down_search_field/blob/master/CONTRIBUTING.md) 
+[Contribution Guidelines](https://github.com/rohanjariwala03/drop_down_search_field/blob/master/CONTRIBUTING.md)
+
+
+## TODO
+- Add More Examples.
+- Give more customization options to users such as color, style and sizing.
